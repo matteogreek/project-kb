@@ -43,11 +43,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      - name: Install PostgreSQL client
+        run: |
+          apt-get update
+          apt-get install --yes postgresql-client
 
       - name: Set up Postgres tables
         run: |
           psql -f prospector/ddl/10_commit.sql postgresql://postgres:postgres@localhost:5432/postgres
           psql -f prospector/ddl/20_users.sql postgresql://postgres:postgres@localhost:5432/postgres
+        env:
+          PGPASSWORD: example
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
