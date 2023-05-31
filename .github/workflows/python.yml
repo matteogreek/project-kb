@@ -50,8 +50,8 @@ jobs:
 
       - name: Set up Postgres tables
         run: |
-          psql -f prospector/ddl/10_commit.sql postgresql://postgres:postgres@localhost:5432/postgres
-          psql -f prospector/ddl/20_users.sql postgresql://postgres:postgres@localhost:5432/postgres
+          psql -h localhost -U postgres -d postgres -f prospector/ddl/10_commit.sql
+          psql -h localhost -U postgres -d postgres -f prospector/ddl/20_users.sql
         env:
           PGPASSWORD: example
       - name: Set up Python 3.10
