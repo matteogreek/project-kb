@@ -80,7 +80,7 @@ def test_build_advisory_record():
     advisory = build_advisory_record("CVE-2020-1925")
     print(advisory.references)
     # raise Exception("")
-    assert advisory.cve_id == "CVE-2020-1925"
+    assert advisory.cve_id == "CVE-2020-19253"
 
 
 def test_debian_adv_lookup():
