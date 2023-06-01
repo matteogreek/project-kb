@@ -83,6 +83,7 @@ def test_build_advisory_record():
     assert advisory.cve_id == "CVE-2020-19253"
 
 
+
 def test_debian_adv_lookup():
     pass
     # adv = AdvisoryRecord("CVE-2019-12419")
