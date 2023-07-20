@@ -11,6 +11,7 @@ import validators
 from dateutil.parser import isoparse
 
 from log.logger import get_level, logger, pretty_log
+from util.config_parser import parse_config_file
 from util.http import extract_from_webpage, fetch_url, get_urls
 
 from .nlp import (
@@ -56,7 +57,11 @@ ALLOWED_SITES = [
 LOCAL_NVD_REST_ENDPOINT = "http://localhost:8000/nvd/vulnerabilities/"
 NVD_REST_ENDPOINT = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 MITRE_REST_ENDPOINT = "https://cveawg.mitre.org/api/cve/"
-NVD_API_KEY = os.getenv("NVD_API_KEY", "")
+
+# TODO: pass the NVD key in a proper way
+config = parse_config_file()
+NVD_API_KEY = config.nvd_token
+# NVD_API_KEY = os.getenv("NVD_API_KEY", "")
 
 
 class AdvisoryRecord:
@@ -132,26 +137,27 @@ class AdvisoryRecord:
             # self.references[ref] += 2
             self.references[self.extract_hashes(ref)] += 2
 
-    def get_advisory(self):
-        details, metadata = get_from_mitre(self.cve_id)
-        if metadata is None:
-            raise Exception("MITRE API Error")
+    def get_advisory(self, use_nvd=False):
+        if use_nvd:
+            data = get_from_local(self.cve_id)
+            if not data:
+                data = get_from_nvd(self.cve_id)
+            if not data:
+                raise Exception("Backend error and NVD error. Wrong API key?")
 
-        if metadata["state"] == "REJECTED":
-            raise Exception("Rejected CVE")
+            self.parse_advisory_nvd(data)
 
-        self.parse_advisory_2(details, metadata)
+        else:
+            details, metadata = get_from_mitre(self.cve_id)
+            if metadata is None:
+                raise Exception("MITRE API Error")
 
-        # data = get_from_local(self.cve_id)
-        # if not data:
-        #     data = get_from_nvd(self.cve_id)
+            if metadata["state"] == "REJECTED":
+                raise Exception("Rejected CVE")
 
-        # if not data:
-        #     raise Exception("Backend error and NVD error. Wrong API key?")
+            self.parse_advisory_mitre(details, metadata)
 
-        # self.parse_advisory(data)
-
-    def parse_advisory(self, data):
+    def parse_advisory_nvd(self, data):
         self.published_timestamp = int(isoparse(data["published"]).timestamp())
         self.updated_timestamp = int(isoparse(data["lastModified"]).timestamp())
         self.description = data["descriptions"][0]["value"]
@@ -242,7 +248,7 @@ class AdvisoryRecord:
         # validators.url(reference)
         return ""
 
-    def parse_advisory_2(self, details, metadata):
+    def parse_advisory_mitre(self, details, metadata):
         self.affected_products = [details["affected"][0]["product"]]
         self.versions = dict(details["affected"][0]["versions"][0])
         timestamp_fields = {
@@ -324,7 +330,7 @@ def build_advisory_record(
     cve_id: str,
     description: Optional[str] = None,
     nvd_rest_endpoint: Optional[str] = None,
-    use_nvd: bool = True,
+    use_nvd: bool = False,
     publication_date: Optional[str] = None,
     advisory_keywords: Set[str] = set(),
     modified_files: Optional[str] = None,
@@ -335,7 +341,7 @@ def build_advisory_record(
     )
 
     try:
-        advisory_record.get_advisory()
+        advisory_record.get_advisory(use_nvd)
     except Exception as e:
         logger.error(
             f"Could not retrieve {cve_id}: {e}",

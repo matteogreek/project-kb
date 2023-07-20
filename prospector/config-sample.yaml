@@ -9,7 +9,7 @@ max_candidates: 2000
 fetch_references: False
 
 # Wether to use the NVD database or not
-use_nvd: True
+use_nvd: False
 
 # The NVD API token
 nvd_token: Null
