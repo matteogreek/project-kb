@@ -1,27 +1,17 @@
-import asyncio
 import csv
 import datetime
 import json
 
 import aiofiles
 import aiohttp
-import psycopg2
-import requests
-from psycopg2.extensions import parse_dsn
-from psycopg2.extras import DictCursor, DictRow, Json
 
 from backenddb.postgres import PostgresBackendDB
-from data_sources.nvd.versions_extraction import (
-    extract_version_range,
-    extract_version_ranges_cpe,
-    process_versions,
-)
+from data_sources.nvd.versions_extraction import extract_version_range
 from datamodel.nlp import extract_products
 from log.logger import logger
 from util.config_parser import parse_config_file
 
 config = parse_config_file()
-
 # with open("./data/project_metadata.json", "r") as f:
 #    global match_list
 #    match_list = json.load(f)
@@ -154,7 +144,7 @@ async def process_entries():
         entry_id = unprocessed_vuln[0]
         raw_record = unprocessed_vuln[1]
 
-        processed_vuln = await map_entry(raw_record)
+        processed_vuln = await map_entry(raw_record, config.use_gpt)
         if processed_vuln is not None:
             processed_vulns.append(processed_vuln)
             db.save_processed_vuln(
@@ -164,12 +154,20 @@ async def process_entries():
     return processed_vulns
 
 
-async def map_entry(vuln):
-    # TODO: improve mapping technique
+# TODO develop module to extract the project name using gpt to use in the github api call
+async def map_entry(vuln, use_gpt=False):
     async with aiofiles.open("./data/project_metadata.json", "r") as f:
         match_list = json.loads(await f.read())
 
-    project_names = extract_products(vuln["cve"]["descriptions"][0]["value"])
+    project_name = ""
+    # repo_url = ""
+
+    if use_gpt:
+        print("use gpt to extract affected product name")
+        # implement function
+    else:
+        project_names = extract_products(vuln["cve"]["descriptions"][0]["value"])
+
     # print(project_names)
     for project_name in project_names:
         for data in match_list.values():
@@ -186,25 +184,67 @@ async def map_entry(vuln):
                 print(vuln["cve"]["id"])
                 return filtered_vuln
 
+    # no match in metadata, try to search the repo using Github API.
+    # repo_url = await retrieve_repository(project_names[0])
+    # if repo_url is not None:
+    #    new_metadata_record = {
+    #        project_names[0].replace(" ", "-"): {
+    #            "mailing_list_archives": "",
+    #            "jira_prefix": "",
+    #            "security_advisory_page": "",
+    #            "jira_link_template": "",
+    #            "git": repo_url,
+    #            "search keywords": [
+    #                project_name[0],
+    #                project_name[0].replace(" ", "-"),
+    #            ],
+    #        }
+    #    }
+    #
+    #    # save_metadata(new_metadata_record, "./data/project_metadata.json")
+    #    logger.error(f"metadata{new_metadata_record}", exc_info=True)
+    #    print(new_metadata_record)
+
     return None
 
 
 # if no map is possible search project name using GitHub API
-def retrieve_repository(project_name):
+async def retrieve_repository(project_name):
     """
     Retrieve the GitHub repository URL for a given project name
     """
-    # GitHub API endpoint for searching repositories
     url = "https://api.github.com/search/repositories"
 
     query_params = {"q": project_name, "sort": "stars", "order": "desc"}
 
-    response = requests.get(url, params=query_params)
-
-    if response.status_code == 200:
-        data = response.json()
-        if data["total_count"] > 0:
-            repository_url = data["items"][0]["html_url"]
-            return repository_url
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, params=query_params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data["total_count"] > 0:
+                        repository_url = data["items"][0]["html_url"]
+                        return repository_url
+                else:
+                    print("Error while trying to fetch github repository url")
+        except aiohttp.ClientError as e:
+            print(str(e))
+            logger.error("Error while retrieving Github repository", exc_info=True)
 
     return None
+
+
+def save_metadata(record, file_path):
+    """
+    After retrieving product names and repository, build and save metadata entry. Adding more metadata increases the number of projects we analyze automatically with the pipeline
+    """
+    try:
+        with open(file_path, "r") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        data = {}
+
+    data.update(record)
+
+    with open(file_path, "w") as file:
+        json.dump(data, file, indent=2)

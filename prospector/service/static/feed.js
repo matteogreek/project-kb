@@ -34,6 +34,7 @@ async function fetchVulns() {
         .then(data => {
             console.log(data);
             fetchVulnData()
+            alert("Vulnerabilities fetched");
         })
         .catch(error => {
             console.error(error);

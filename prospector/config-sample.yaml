@@ -18,8 +18,8 @@ nvd_token: Null
 use_backend: optional
 
 # Optional backend info to save/use already preprocessed data
-#backend: http://backend:8000
-backend: http://localhost:8000
+backend: http://backend:8000
+#backend: http://localhost:8000
 
 database:
   user: postgres
@@ -44,3 +44,9 @@ git_cache: /tmp/gitcache
 
 # The GitHub API token
 github_token: Null
+
+# Option to use GPT or not
+use_gpt: False
+
+# The key.json for using gpt
+gpt_key: Null
